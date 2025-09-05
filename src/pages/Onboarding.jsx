@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import { Shield, MapPin, Globe, CreditCard, ArrowRight } from 'lucide-react'
@@ -111,7 +111,7 @@ const Onboarding = () => {
                 Select Your State
               </h2>
               <p className="text-text-secondary">
-                We'll provide state-specific legal information and rights
+                We&apos;ll provide state-specific legal information and rights
               </p>
             </div>
 

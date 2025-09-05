@@ -1,20 +1,26 @@
-import React, { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useApp } from '../context/AppContext'
-import { Mic, Square, MapPin, Clock, Save, Share2 } from 'lucide-react'
+import { Mic, MapPin, Clock, Save } from 'lucide-react'
 import RecordButton from '../components/RecordButton'
 import ShareButton from '../components/ShareButton'
 import Modal from '../components/Modal'
+import { openaiService, backendService } from '../services/api'
+import { db, EncounterLog } from '../utils/database'
+
 
 const Record = () => {
-  const { language, addEncounterLog, selectedState } = useApp()
+  const { language, addEncounterLog, selectedState, user, subscriptionStatus } = useApp()
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [audioUrl, setAudioUrl] = useState(null)
+
   const [notes, setNotes] = useState('')
   const [location, setLocation] = useState('')
+  const [coordinates, setCoordinates] = useState(null)
   const [showSummaryModal, setShowSummaryModal] = useState(false)
   const [generatedSummary, setGeneratedSummary] = useState('')
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false)
+  const [currentEncounter, setCurrentEncounter] = useState(null)
 
   const mediaRecorderRef = useRef(null)
   const chunksRef = useRef([])
@@ -29,16 +35,22 @@ const Record = () => {
   }, [])
 
   useEffect(() => {
-    // Auto-detect location
+    // Auto-detect location with enhanced accuracy
     if ('geolocation' in navigator) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          const { latitude, longitude } = position.coords
+          const { latitude, longitude, accuracy } = position.coords
+          setCoordinates({ latitude, longitude, accuracy })
           setLocation(`${latitude.toFixed(6)}, ${longitude.toFixed(6)}`)
         },
         (error) => {
           console.error('Error getting location:', error)
           setLocation(language === 'en' ? 'Location unavailable' : 'Ubicación no disponible')
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 300000 // 5 minutes
         }
       )
     }
@@ -57,10 +69,36 @@ const Record = () => {
         }
       }
 
-      mediaRecorderRef.current.onstop = () => {
+      mediaRecorderRef.current.onstop = async () => {
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
         const url = URL.createObjectURL(blob)
         setAudioUrl(url)
+
+        
+        // Create encounter log immediately
+        const encounter = new EncounterLog({
+          userId: user?.userId,
+          location,
+          coordinates,
+          duration: recordingTime,
+          notes,
+          status: 'draft'
+        })
+
+        setCurrentEncounter(encounter)
+
+        // Upload audio if premium user
+        if (subscriptionStatus === 'premium' && blob.size > 0) {
+          try {
+            const uploadResult = await backendService.uploadAudio(blob, encounter.logId)
+            encounter.audioRecordingUrl = uploadResult.audioUrl
+          } catch (error) {
+            console.error('Failed to upload audio:', error)
+          }
+        }
+
+        // Save encounter to local database
+        db.saveEncounter(encounter)
         
         // Stop all tracks to release microphone
         stream.getTracks().forEach(track => track.stop())
@@ -111,24 +149,35 @@ const Record = () => {
       return
     }
 
+    // Check if user has access to AI summaries
+    if (subscriptionStatus !== 'premium') {
+      alert(language === 'en' 
+        ? 'AI-generated summaries are available with Premium subscription. Upgrade to access this feature.'
+        : 'Los resúmenes generados por IA están disponibles con la suscripción Premium. Actualice para acceder a esta función.'
+      )
+      return
+    }
+
     setIsGeneratingSummary(true)
 
     try {
-      // Mock summary generation - in real app would use OpenAI API
-      const mockSummary = `
-ENCOUNTER SUMMARY
-Date: ${new Date().toLocaleDateString()}
-Time: ${new Date().toLocaleTimeString()}
-Location: ${location}
-State: ${selectedState}
-Duration: ${formatTime(recordingTime)}
+      // Use OpenAI service to generate summary
+      const summary = await openaiService.generateEncounterSummary(
+        notes,
+        location,
+        selectedState,
+        language
+      )
 
-Notes: ${notes}
-
-This is a generated summary based on the provided information. Keep this record for your safety and legal documentation.
-      `.trim()
-
-      setGeneratedSummary(mockSummary)
+      setGeneratedSummary(summary)
+      
+      // Update current encounter with summary
+      if (currentEncounter) {
+        currentEncounter.summary = summary
+        currentEncounter.status = 'completed'
+        db.saveEncounter(currentEncounter)
+      }
+      
       setShowSummaryModal(true)
     } catch (error) {
       console.error('Error generating summary:', error)
@@ -141,29 +190,64 @@ This is a generated summary based on the provided information. Keep this record 
     }
   }
 
-  const saveEncounter = () => {
-    const encounter = {
-      timestamp: new Date().toISOString(),
-      location,
-      audioRecordingUrl: audioUrl,
-      notes,
-      summary: generatedSummary,
-      duration: recordingTime
+  const saveEncounter = async () => {
+    try {
+      let encounter = currentEncounter
+      
+      if (!encounter) {
+        // Create new encounter if none exists
+        encounter = new EncounterLog({
+          userId: user?.userId,
+          location,
+          coordinates,
+          audioRecordingUrl: audioUrl,
+          notes,
+          summary: generatedSummary,
+          duration: recordingTime,
+          status: 'completed'
+        })
+      } else {
+        // Update existing encounter
+        encounter.update({
+          notes,
+          summary: generatedSummary,
+          status: 'completed'
+        })
+      }
+
+      // Save to local database
+      db.saveEncounter(encounter)
+      
+      // Save to backend if available
+      try {
+        await backendService.saveEncounterLog(encounter.toJSON())
+      } catch (error) {
+        console.warn('Failed to sync with backend:', error)
+      }
+
+      // Add to context for immediate UI update
+      addEncounterLog(encounter.toJSON())
+      
+      // Reset form
+      setAudioUrl(null)
+
+      setNotes('')
+      setRecordingTime(0)
+      setGeneratedSummary('')
+      setShowSummaryModal(false)
+      setCurrentEncounter(null)
+
+      alert(language === 'en' 
+        ? 'Encounter saved successfully!'
+        : '¡Encuentro guardado exitosamente!'
+      )
+    } catch (error) {
+      console.error('Error saving encounter:', error)
+      alert(language === 'en' 
+        ? 'Failed to save encounter. Please try again.'
+        : 'Error al guardar el encuentro. Inténtelo de nuevo.'
+      )
     }
-
-    addEncounterLog(encounter)
-    
-    // Reset form
-    setAudioUrl(null)
-    setNotes('')
-    setRecordingTime(0)
-    setGeneratedSummary('')
-    setShowSummaryModal(false)
-
-    alert(language === 'en' 
-      ? 'Encounter saved successfully!'
-      : '¡Encuentro guardado exitosamente!'
-    )
   }
 
   return (

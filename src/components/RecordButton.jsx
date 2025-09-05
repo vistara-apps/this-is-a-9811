@@ -1,4 +1,3 @@
-import React from 'react'
 import { Mic, Square } from 'lucide-react'
 
 const RecordButton = ({ variant = 'inactive', onClick, className = '' }) => {

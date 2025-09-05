@@ -1,7 +1,10 @@
-import React, { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useApp } from '../context/AppContext'
-import { User, Settings, CreditCard, MapPin, Globe, LogOut, Crown } from 'lucide-react'
+import { User, CreditCard, MapPin, Globe, LogOut, Crown } from 'lucide-react'
 import Modal from '../components/Modal'
+import { stripeService } from '../services/stripe'
+import { db } from '../utils/database'
+
 
 const Profile = () => {
   const { 
@@ -18,6 +21,9 @@ const Profile = () => {
   
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [isUpgrading, setIsUpgrading] = useState(false)
+  const [storageUsage, setStorageUsage] = useState(null)
+
 
   const states = [
     { code: 'CA', name: 'California' },
@@ -27,15 +33,36 @@ const Profile = () => {
     { code: 'IL', name: 'Illinois' },
   ]
 
-  const handleUpgrade = () => {
-    // Mock upgrade process
-    setSubscriptionStatus('premium')
-    updateUser({ subscriptionStatus: 'premium' })
-    setShowUpgradeModal(false)
-    alert(language === 'en' 
-      ? 'Successfully upgraded to Premium! Welcome to Pocket Protector Premium.'
-      : '¡Actualizado exitosamente a Premium! Bienvenido a Pocket Protector Premium.'
-    )
+  const handleUpgrade = async () => {
+    setIsUpgrading(true)
+    try {
+      const result = await stripeService.createSubscriptionCheckout(
+        user?.userId,
+        'price_premium_monthly',
+        `${window.location.origin}/profile?success=true`,
+        `${window.location.origin}/profile?canceled=true`
+      )
+      
+      if (result.mock) {
+        // Handle mock upgrade for demo
+        setSubscriptionStatus('premium')
+        updateUser({ subscriptionStatus: 'premium' })
+        setShowUpgradeModal(false)
+        alert(language === 'en' 
+          ? 'Successfully upgraded to Premium! Welcome to Pocket Protector Premium.'
+          : '¡Actualizado exitosamente a Premium! Bienvenido a Pocket Protector Premium.'
+        )
+      }
+      // If not mock, user will be redirected to Stripe Checkout
+    } catch (error) {
+      console.error('Upgrade failed:', error)
+      alert(language === 'en' 
+        ? 'Upgrade failed. Please try again.'
+        : 'La actualización falló. Inténtelo de nuevo.'
+      )
+    } finally {
+      setIsUpgrading(false)
+    }
   }
 
   const handleLogout = () => {
@@ -47,6 +74,33 @@ const Profile = () => {
     setSelectedState(newState)
     updateUser({ state: newState })
   }
+  // Load storage usage on component mount
+  useEffect(() => {
+    const usage = db.getStorageUsage()
+    setStorageUsage(usage)
+  }, [])
+
+  // Handle URL parameters for Stripe success/cancel
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    if (urlParams.get('success') === 'true') {
+      setSubscriptionStatus('premium')
+      updateUser({ subscriptionStatus: 'premium' })
+      alert(language === 'en' 
+        ? 'Successfully upgraded to Premium! Welcome to Pocket Protector Premium.'
+        : '¡Actualizado exitosamente a Premium! Bienvenido a Pocket Protector Premium.'
+      )
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname)
+    } else if (urlParams.get('canceled') === 'true') {
+      alert(language === 'en' 
+        ? 'Upgrade canceled. You can try again anytime.'
+        : 'Actualización cancelada. Puede intentarlo de nuevo en cualquier momento.'
+      )
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname)
+    }
+  }, [language, setSubscriptionStatus, updateUser])
 
   const handleLanguageChange = (newLanguage) => {
     setLanguage(newLanguage)
@@ -166,7 +220,7 @@ const Profile = () => {
           {language === 'en' ? 'Usage Statistics' : 'Estadísticas de Uso'}
         </h2>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div className="card text-center">
             <div className="text-2xl font-bold text-primary">{encounterLogs.length}</div>
             <div className="text-sm text-text-secondary">
@@ -180,6 +234,15 @@ const Profile = () => {
             </div>
             <div className="text-sm text-text-secondary">
               {language === 'en' ? 'Setup Complete' : 'Configuración Completa'}
+            </div>
+          </div>
+
+          <div className="card text-center">
+            <div className="text-2xl font-bold text-secondary">
+              {storageUsage ? `${Math.round(storageUsage / 1024)}KB` : '0KB'}
+            </div>
+            <div className="text-sm text-text-secondary">
+              {language === 'en' ? 'Data Used' : 'Datos Usados'}
             </div>
           </div>
         </div>
@@ -253,9 +316,13 @@ const Profile = () => {
 
           <button
             onClick={handleUpgrade}
-            className="w-full btn-primary"
+            disabled={isUpgrading}
+            className="w-full btn-primary disabled:opacity-50"
           >
-            {language === 'en' ? 'Upgrade Now' : 'Actualizar Ahora'}
+            {isUpgrading 
+              ? (language === 'en' ? 'Processing...' : 'Procesando...')
+              : (language === 'en' ? 'Upgrade Now' : 'Actualizar Ahora')
+            }
           </button>
         </div>
       </Modal>
