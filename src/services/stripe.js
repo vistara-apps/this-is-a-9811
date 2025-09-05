@@ -4,6 +4,7 @@
  */
 
 import { loadStripe } from '@stripe/stripe-js'
+import { useState } from 'react'
 
 const STRIPE_CONFIG = {
   PUBLISHABLE_KEY: import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY,
@@ -283,8 +284,8 @@ export class StripeService {
  * Subscription Hook for React Components
  */
 export const useSubscription = () => {
-  const [subscriptionStatus, setSubscriptionStatus] = React.useState('free')
-  const [isLoading, setIsLoading] = React.useState(false)
+  const [subscriptionStatus, setSubscriptionStatus] = useState('free')
+  const [isLoading, setIsLoading] = useState(false)
   const stripeService = new StripeService()
 
   const upgradeToPremiun = async (userId) => {
