@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import { createContext, useContext, useState, useEffect } from 'react'
 
 const AppContext = createContext()
 
@@ -34,7 +34,7 @@ export const AppProvider = ({ children }) => {
   const detectState = async () => {
     try {
       if ('geolocation' in navigator) {
-        navigator.geolocation.getCurrentPosition(async (position) => {
+        navigator.geolocation.getCurrentPosition(async (_position) => {
           // Mock state detection - in real app would use reverse geocoding
           const mockState = 'CA' // California as default
           setSelectedState(mockState)

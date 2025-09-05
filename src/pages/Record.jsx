@@ -1,19 +1,19 @@
-import React, { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useApp } from '../context/AppContext'
-import { Mic, Square, MapPin, Clock, Save, Share2 } from 'lucide-react'
+import { Mic, MapPin, Clock, Save } from 'lucide-react'
 import RecordButton from '../components/RecordButton'
 import ShareButton from '../components/ShareButton'
 import Modal from '../components/Modal'
 import { openaiService, backendService } from '../services/api'
 import { db, EncounterLog } from '../utils/database'
-import { stripeService } from '../services/stripe'
+
 
 const Record = () => {
   const { language, addEncounterLog, selectedState, user, subscriptionStatus } = useApp()
   const [isRecording, setIsRecording] = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [audioUrl, setAudioUrl] = useState(null)
-  const [audioBlob, setAudioBlob] = useState(null)
+
   const [notes, setNotes] = useState('')
   const [location, setLocation] = useState('')
   const [coordinates, setCoordinates] = useState(null)
@@ -73,7 +73,7 @@ const Record = () => {
         const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
         const url = URL.createObjectURL(blob)
         setAudioUrl(url)
-        setAudioBlob(blob)
+
         
         // Create encounter log immediately
         const encounter = new EncounterLog({
@@ -230,7 +230,7 @@ const Record = () => {
       
       // Reset form
       setAudioUrl(null)
-      setAudioBlob(null)
+
       setNotes('')
       setRecordingTime(0)
       setGeneratedSummary('')

@@ -1,4 +1,3 @@
-import React from 'react'
 import { useApp } from '../context/AppContext'
 import { Scale, Phone, ExternalLink, Crown } from 'lucide-react'
 import InfoCard from '../components/InfoCard'

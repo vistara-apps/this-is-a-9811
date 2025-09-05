@@ -1,4 +1,3 @@
-import React from 'react'
 import { ChevronRight } from 'lucide-react'
 
 const InfoCard = ({ variant = 'default', title, content, onClick, action }) => {

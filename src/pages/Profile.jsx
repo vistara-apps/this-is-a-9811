@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useApp } from '../context/AppContext'
-import { User, Settings, CreditCard, MapPin, Globe, LogOut, Crown, Shield, Download } from 'lucide-react'
+import { User, CreditCard, MapPin, Globe, LogOut, Crown } from 'lucide-react'
 import Modal from '../components/Modal'
 import { stripeService } from '../services/stripe'
 import { db } from '../utils/database'
-import { securityAudit, privacyService } from '../utils/security'
+
 
 const Profile = () => {
   const { 
@@ -21,10 +21,9 @@ const Profile = () => {
   
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
-  const [showSecurityModal, setShowSecurityModal] = useState(false)
   const [isUpgrading, setIsUpgrading] = useState(false)
-  const [securityReport, setSecurityReport] = useState(null)
   const [storageUsage, setStorageUsage] = useState(null)
+
 
   const states = [
     { code: 'CA', name: 'California' },
@@ -75,67 +74,6 @@ const Profile = () => {
     setSelectedState(newState)
     updateUser({ state: newState })
   }
-
-  const runSecurityAudit = async () => {
-    try {
-      const report = await securityAudit.runAudit()
-      setSecurityReport(report)
-      setShowSecurityModal(true)
-    } catch (error) {
-      console.error('Security audit failed:', error)
-      alert(language === 'en' 
-        ? 'Security audit failed. Please try again.'
-        : 'La auditoría de seguridad falló. Inténtelo de nuevo.'
-      )
-    }
-  }
-
-  const exportUserData = () => {
-    try {
-      const data = db.exportData()
-      const blob = new Blob([data], { type: 'application/json' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `pocket-protector-data-${new Date().toISOString().split('T')[0]}.json`
-      document.body.appendChild(a)
-      a.click()
-      document.body.removeChild(a)
-      URL.revokeObjectURL(url)
-      
-      alert(language === 'en' 
-        ? 'Data exported successfully!'
-        : '¡Datos exportados exitosamente!'
-      )
-    } catch (error) {
-      console.error('Export failed:', error)
-      alert(language === 'en' 
-        ? 'Export failed. Please try again.'
-        : 'La exportación falló. Inténtelo de nuevo.'
-      )
-    }
-  }
-
-  const clearAllData = () => {
-    const confirmed = window.confirm(language === 'en' 
-      ? 'Are you sure you want to delete all your data? This action cannot be undone.'
-      : '¿Está seguro de que desea eliminar todos sus datos? Esta acción no se puede deshacer.'
-    )
-    
-    if (confirmed) {
-      try {
-        db.deleteUser()
-        handleLogout()
-      } catch (error) {
-        console.error('Data deletion failed:', error)
-        alert(language === 'en' 
-          ? 'Data deletion failed. Please try again.'
-          : 'La eliminación de datos falló. Inténtelo de nuevo.'
-        )
-      }
-    }
-  }
-
   // Load storage usage on component mount
   useEffect(() => {
     const usage = db.getStorageUsage()
@@ -282,7 +220,7 @@ const Profile = () => {
           {language === 'en' ? 'Usage Statistics' : 'Estadísticas de Uso'}
         </h2>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div className="card text-center">
             <div className="text-2xl font-bold text-primary">{encounterLogs.length}</div>
             <div className="text-sm text-text-secondary">
@@ -296,6 +234,15 @@ const Profile = () => {
             </div>
             <div className="text-sm text-text-secondary">
               {language === 'en' ? 'Setup Complete' : 'Configuración Completa'}
+            </div>
+          </div>
+
+          <div className="card text-center">
+            <div className="text-2xl font-bold text-secondary">
+              {storageUsage ? `${Math.round(storageUsage / 1024)}KB` : '0KB'}
+            </div>
+            <div className="text-sm text-text-secondary">
+              {language === 'en' ? 'Data Used' : 'Datos Usados'}
             </div>
           </div>
         </div>
@@ -369,9 +316,13 @@ const Profile = () => {
 
           <button
             onClick={handleUpgrade}
-            className="w-full btn-primary"
+            disabled={isUpgrading}
+            className="w-full btn-primary disabled:opacity-50"
           >
-            {language === 'en' ? 'Upgrade Now' : 'Actualizar Ahora'}
+            {isUpgrading 
+              ? (language === 'en' ? 'Processing...' : 'Procesando...')
+              : (language === 'en' ? 'Upgrade Now' : 'Actualizar Ahora')
+            }
           </button>
         </div>
       </Modal>

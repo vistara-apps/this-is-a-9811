@@ -1,10 +1,9 @@
-import React from 'react'
 import { Shield, Settings } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { useNavigate } from 'react-router-dom'
 
 const Header = () => {
-  const { user, selectedState, language, setLanguage } = useApp()
+  const { selectedState, language, setLanguage } = useApp()
   const navigate = useNavigate()
 
   return (

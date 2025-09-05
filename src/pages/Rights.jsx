@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useApp } from '../context/AppContext'
 import { getStateRights } from '../data/stateRights'
 import { BookOpen, MapPin, AlertCircle } from 'lucide-react'

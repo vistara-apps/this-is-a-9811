@@ -1,8 +1,8 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { Share2, Copy, Check } from 'lucide-react'
 import Modal from './Modal'
 
-const ShareButton = ({ variant = 'dialog', content, onShare }) => {
+const ShareButton = ({ variant = 'dialog', content, onShare: _onShare }) => {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [copied, setCopied] = useState(false)
 

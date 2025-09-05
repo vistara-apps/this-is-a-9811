@@ -3,6 +3,7 @@
  * Handles subscription management and payment processing
  */
 
+import React from 'react'
 import { loadStripe } from '@stripe/stripe-js'
 import { useState } from 'react'
 
