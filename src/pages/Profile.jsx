@@ -1,7 +1,10 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useApp } from '../context/AppContext'
-import { User, Settings, CreditCard, MapPin, Globe, LogOut, Crown } from 'lucide-react'
+import { User, Settings, CreditCard, MapPin, Globe, LogOut, Crown, Shield, Download } from 'lucide-react'
 import Modal from '../components/Modal'
+import { stripeService } from '../services/stripe'
+import { db } from '../utils/database'
+import { securityAudit, privacyService } from '../utils/security'
 
 const Profile = () => {
   const { 
@@ -18,6 +21,10 @@ const Profile = () => {
   
   const [showUpgradeModal, setShowUpgradeModal] = useState(false)
   const [showSettingsModal, setShowSettingsModal] = useState(false)
+  const [showSecurityModal, setShowSecurityModal] = useState(false)
+  const [isUpgrading, setIsUpgrading] = useState(false)
+  const [securityReport, setSecurityReport] = useState(null)
+  const [storageUsage, setStorageUsage] = useState(null)
 
   const states = [
     { code: 'CA', name: 'California' },
@@ -27,15 +34,36 @@ const Profile = () => {
     { code: 'IL', name: 'Illinois' },
   ]
 
-  const handleUpgrade = () => {
-    // Mock upgrade process
-    setSubscriptionStatus('premium')
-    updateUser({ subscriptionStatus: 'premium' })
-    setShowUpgradeModal(false)
-    alert(language === 'en' 
-      ? 'Successfully upgraded to Premium! Welcome to Pocket Protector Premium.'
-      : '¡Actualizado exitosamente a Premium! Bienvenido a Pocket Protector Premium.'
-    )
+  const handleUpgrade = async () => {
+    setIsUpgrading(true)
+    try {
+      const result = await stripeService.createSubscriptionCheckout(
+        user?.userId,
+        'price_premium_monthly',
+        `${window.location.origin}/profile?success=true`,
+        `${window.location.origin}/profile?canceled=true`
+      )
+      
+      if (result.mock) {
+        // Handle mock upgrade for demo
+        setSubscriptionStatus('premium')
+        updateUser({ subscriptionStatus: 'premium' })
+        setShowUpgradeModal(false)
+        alert(language === 'en' 
+          ? 'Successfully upgraded to Premium! Welcome to Pocket Protector Premium.'
+          : '¡Actualizado exitosamente a Premium! Bienvenido a Pocket Protector Premium.'
+        )
+      }
+      // If not mock, user will be redirected to Stripe Checkout
+    } catch (error) {
+      console.error('Upgrade failed:', error)
+      alert(language === 'en' 
+        ? 'Upgrade failed. Please try again.'
+        : 'La actualización falló. Inténtelo de nuevo.'
+      )
+    } finally {
+      setIsUpgrading(false)
+    }
   }
 
   const handleLogout = () => {
@@ -47,6 +75,94 @@ const Profile = () => {
     setSelectedState(newState)
     updateUser({ state: newState })
   }
+
+  const runSecurityAudit = async () => {
+    try {
+      const report = await securityAudit.runAudit()
+      setSecurityReport(report)
+      setShowSecurityModal(true)
+    } catch (error) {
+      console.error('Security audit failed:', error)
+      alert(language === 'en' 
+        ? 'Security audit failed. Please try again.'
+        : 'La auditoría de seguridad falló. Inténtelo de nuevo.'
+      )
+    }
+  }
+
+  const exportUserData = () => {
+    try {
+      const data = db.exportData()
+      const blob = new Blob([data], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `pocket-protector-data-${new Date().toISOString().split('T')[0]}.json`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      
+      alert(language === 'en' 
+        ? 'Data exported successfully!'
+        : '¡Datos exportados exitosamente!'
+      )
+    } catch (error) {
+      console.error('Export failed:', error)
+      alert(language === 'en' 
+        ? 'Export failed. Please try again.'
+        : 'La exportación falló. Inténtelo de nuevo.'
+      )
+    }
+  }
+
+  const clearAllData = () => {
+    const confirmed = window.confirm(language === 'en' 
+      ? 'Are you sure you want to delete all your data? This action cannot be undone.'
+      : '¿Está seguro de que desea eliminar todos sus datos? Esta acción no se puede deshacer.'
+    )
+    
+    if (confirmed) {
+      try {
+        db.deleteUser()
+        handleLogout()
+      } catch (error) {
+        console.error('Data deletion failed:', error)
+        alert(language === 'en' 
+          ? 'Data deletion failed. Please try again.'
+          : 'La eliminación de datos falló. Inténtelo de nuevo.'
+        )
+      }
+    }
+  }
+
+  // Load storage usage on component mount
+  useEffect(() => {
+    const usage = db.getStorageUsage()
+    setStorageUsage(usage)
+  }, [])
+
+  // Handle URL parameters for Stripe success/cancel
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search)
+    if (urlParams.get('success') === 'true') {
+      setSubscriptionStatus('premium')
+      updateUser({ subscriptionStatus: 'premium' })
+      alert(language === 'en' 
+        ? 'Successfully upgraded to Premium! Welcome to Pocket Protector Premium.'
+        : '¡Actualizado exitosamente a Premium! Bienvenido a Pocket Protector Premium.'
+      )
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname)
+    } else if (urlParams.get('canceled') === 'true') {
+      alert(language === 'en' 
+        ? 'Upgrade canceled. You can try again anytime.'
+        : 'Actualización cancelada. Puede intentarlo de nuevo en cualquier momento.'
+      )
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname)
+    }
+  }, [language, setSubscriptionStatus, updateUser])
 
   const handleLanguageChange = (newLanguage) => {
     setLanguage(newLanguage)
